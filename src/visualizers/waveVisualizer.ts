@@ -26,27 +26,40 @@ import AudioAnalyzer from "../analysers/analyzer";
 
 
 
-
-
-
 interface Visualizer {
   canvas: HTMLElement;
   ctx: CanvasRenderingContext2D;
   dataArray: Uint8Array;
   bufferLength: number;
+  audioAnalyzer: any;
 }
 
 class Visualizer {
   constructor(canvas, analyser) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.dataArray = analyser.dataArray;
-    this.bufferLength = analyser.bufferLength;
+
+    if (analyser.getFreqBuffer) {
+      this.audioAnalyzer = analyser;
+      const initialData = analyser.getFreqBuffer();
+      this.dataArray = initialData.dataArray || new Uint8Array(0);
+      this.bufferLength = initialData.bufferLength || 0;
+    } else {
+      this.dataArray = analyser.dataArray;
+      this.bufferLength = analyser.bufferLength;
+    }
+  }
+
+  updateData(newData) {
+    if (newData && newData.dataArray && newData.bufferLength) {
+      this.dataArray = newData.dataArray;
+      this.bufferLength = newData.bufferLength;
+    }
   }
 
   
   wave() {
-    // this.ctx.clearRect(0,0,300, 150)
+    this.ctx.clearRect(0,0,300, 150)
     this.ctx.lineWidth = 5;
     this.ctx.strokeStyle = 'red';
     this.ctx.beginPath();
@@ -54,7 +67,7 @@ class Visualizer {
     const points = this.canvas.width / this.bufferLength;
     let x = 0;
     for (let i = 0; i < this.bufferLength; i++) {
-      const v = this.dataArray[i] // 256.0; // Normalize
+      const v = this.dataArray[i] / 256.0; // Normalize
       const y = (v * this.canvas.height);
         // const y = this.dataArray[i];
       if (i === 0) {
@@ -71,16 +84,16 @@ class Visualizer {
 }
 
 // Patch to make audio work
-const test = document.getElementById("audio")
-test.addEventListener('play', function(){
-  input.audioContext.resume().then(()=>{
-    console.log('playback resumed')
-  })
-})
+// const test = document.getElementById("audio")
+// test.addEventListener('play', function(){
+//   input.audioContext.resume().then(()=>{
+//     console.log('playback resumed')
+//   })
+// })
 
 
-// const canvas = document.getElementById('canvas');
-// const song =document.getElementById('audio');
+const canvas = document.getElementById('canvas');
+const song =document.getElementById('audio');
 
 // // const audioAnalyzer = new AudioAnalyzer()
 
@@ -102,29 +115,40 @@ test.addEventListener('play', function(){
 // })
 
 
-// const input = new Input();
-// const aVis = async (sourceNode) => {
-//   const audioContext = input.getAudioContext();
+const input = new Input();
+const audioAnalyzer = new AudioAnalyzer();
 
-//   if (audioContext.state === 'suspended') { //! Cannot being called. CORS Issue
-//     await audioContext.resume()
-//   }
+const aVis = async (sourceNode) => {
+  const audioContext = input.getAudioContext();
+  if (!audioContext) return;
 
-//   audioAnalyzer.startAnalysis(audioContext, sourceNode);
+  if (audioContext.state === 'suspended') { //! Cannot being called. CORS Issue
+    await audioContext.resume()
+  }
 
-//   const data = audioAnalyzer.getFreqBuffer();
-//   const viz = new Visualizer(canvas, data);
-//   viz.wave();
-// }
+  audioAnalyzer.startAnalysis(audioContext, sourceNode);
 
-// let audioCheck = false;
+  const initialData = audioAnalyzer.getFreqBuffer();
+  const viz = new Visualizer(canvas, initialData);
 
-// input.onAudioReady = (sourceNode) => {
-//   if (!audioCheck) {
-//     aVis(sourceNode);
-//     audioCheck = true;
-//   }
-// }
+  const animate = () => {
+    const freshData = audioAnalyzer.getFreqBuffer();
+    viz.updateData(freshData);
+    requestAnimationFrame(animate);
+  }
+
+  viz.wave();
+  animate();
+}
+
+let audioCheck = false;
+
+input.onAudioReady = (sourceNode) => {
+  if (!audioCheck) {
+    aVis(sourceNode);
+    audioCheck = true;
+  }
+}
 
 
 input.connectToHTMLElement(song)

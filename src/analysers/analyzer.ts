@@ -25,6 +25,7 @@ class AudioAnalyzer {
         this.timeDomainDataArray = new Uint8Array(this.bufferLength); 
 
         sourceNode.connect(this.analyserNode);
+        this.analyserNode.connect(audioContext.destination); //! This line was missing
     }
 
     getFrequencyData() {
